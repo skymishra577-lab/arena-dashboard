@@ -1,33 +1,81 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from io import BytesIO
 
-# ------------------------------------------
+# =========================================================
 # PAGE CONFIG
-# ------------------------------------------
+# =========================================================
 
 st.set_page_config(
-    page_title="NEXA Executive Dashboard",
+    page_title="Nexa Executive Dashboard",
     page_icon="🚗",
     layout="wide"
 )
 
-# ------------------------------------------
+# =========================================================
+# COLORS
+# =========================================================
+
+COLORS = [
+    "#00BFFF",
+    "#7B2CBF",
+    "#00C853",
+    "#FFB300",
+    "#FF4081",
+    "#FF6D00",
+    "#00ACC1",
+    "#8BC34A",
+    "#E91E63",
+    "#5E35B1",
+    "#3949AB",
+    "#00897B",
+    "#C0CA33",
+    "#F4511E",
+    "#6D4C41"
+]
+
+MONTH_COLORS = {
+    "April": "#00BFFF",
+    "May": "#7B2CBF",
+    "June": "#00C853",
+    "July": "#FFB300",
+    "August": "#FF4081",
+    "September": "#FF6D00",
+    "October": "#00ACC1",
+    "November": "#8BC34A",
+    "December": "#E91E63",
+    "January": "#5E35B1",
+    "February": "#3949AB",
+    "March": "#00897B"
+}
+
+# =========================================================
 # LOAD DATA
-# ------------------------------------------
+# =========================================================
 
 @st.cache_data
 def load_data():
 
-    df = pd.read_excel("discount_data.xlsx")
+    df = pd.read_excel("nexa_data.xlsx")
 
-    df.columns = df.columns.str.strip()
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
 
-    if "VEH.MODEL" in df.columns:
-        df.rename(
-            columns={"VEH.MODEL": "VEH"},
-            inplace=True
+    for col in [
+        "MONTH",
+        "VEH.MODEL",
+        "RM NAME",
+        "SRM NAME"
+    ]:
+        df[col] = (
+            df[col]
+            .fillna("Unknown")
+            .astype(str)
+            .str.strip()
         )
 
     df["SPECIAL DISCOUNT"] = pd.to_numeric(
@@ -35,308 +83,492 @@ def load_data():
         errors="coerce"
     ).fillna(0)
 
-    df["R.M. NAME"] = df["R.M. NAME"].fillna("Unknown")
-    df["T.L. NAME"] = df["T.L. NAME"].fillna("Unknown")
-    df["CUST. NAME"] = df["CUST. NAME"].fillna("Unknown")
-    df["VEH"] = df["VEH"].fillna("Unknown")
-
     return df
+
 
 df = load_data()
 
-# ------------------------------------------
-# HEADER
-# ------------------------------------------
+# =========================================================
+# MONTH ORDER
+# =========================================================
 
-st.title("🚗 NEXA Executive Dashboard")
-st.markdown("### Discount Analysis Report")
+month_order = [
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "January",
+    "February",
+    "March"
+]
 
-# ------------------------------------------
-# SIDEBAR FILTERS
-# ------------------------------------------
+available_months = [
+    x for x in month_order
+    if x in df["MONTH"].unique()
+]
 
-st.sidebar.header("Filters")
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-vehicle_list = ["All"] + sorted(df["VEH"].unique())
-rm_list = ["All"] + sorted(df["R.M. NAME"].unique())
-tl_list = ["All"] + sorted(df["T.L. NAME"].unique())
+st.sidebar.title("🚗 Nexa Filters")
 
-selected_vehicle = st.sidebar.selectbox(
+selected_month = st.sidebar.selectbox(
+    "Month",
+    ["All"] + available_months
+)
+
+selected_model = st.sidebar.selectbox(
     "Vehicle Model",
-    vehicle_list
+    ["All"] +
+    sorted(df["VEH.MODEL"].unique())
 )
 
 selected_rm = st.sidebar.selectbox(
-    "Relationship Manager",
-    rm_list
+    "RM Name",
+    ["All"] +
+    sorted(df["RM NAME"].unique())
 )
 
-selected_tl = st.sidebar.selectbox(
-    "Team Leader",
-    tl_list
+selected_srm = st.sidebar.selectbox(
+    "SRM Name",
+    ["All"] +
+    sorted(df["SRM NAME"].unique())
 )
+
+# =========================================================
+# FILTER
+# =========================================================
 
 filtered_df = df.copy()
 
-if selected_vehicle != "All":
+if selected_month != "All":
     filtered_df = filtered_df[
-        filtered_df["VEH"] == selected_vehicle
+        filtered_df["MONTH"] == selected_month
+    ]
+
+if selected_model != "All":
+    filtered_df = filtered_df[
+        filtered_df["VEH.MODEL"] == selected_model
     ]
 
 if selected_rm != "All":
     filtered_df = filtered_df[
-        filtered_df["R.M. NAME"] == selected_rm
+        filtered_df["RM NAME"] == selected_rm
     ]
 
-if selected_tl != "All":
+if selected_srm != "All":
     filtered_df = filtered_df[
-        filtered_df["T.L. NAME"] == selected_tl
+        filtered_df["SRM NAME"] == selected_srm
     ]
 
-# ------------------------------------------
-# KPI CARDS
-# ------------------------------------------
+# =========================================================
+# HEADER
+# =========================================================
 
-total_discount = filtered_df["SPECIAL DISCOUNT"].sum()
-avg_discount = filtered_df["SPECIAL DISCOUNT"].mean()
-highest_discount = filtered_df["SPECIAL DISCOUNT"].max()
-total_deals = len(filtered_df)
+st.title("🚗 Nexa Executive Dashboard")
 
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric(
-    "Total Discount",
-    f"₹ {total_discount:,.0f}"
+st.caption(
+    "Special Discount Analysis & Performance Dashboard"
 )
 
-col2.metric(
-    "Average Discount",
-    f"₹ {avg_discount:,.0f}"
-)
+# =========================================================
+# KPI
+# =========================================================
 
-col3.metric(
-    "Highest Discount",
-    f"₹ {highest_discount:,.0f}"
-)
+c1, c2, c3, c4 = st.columns(4)
 
-col4.metric(
-    "Total Deals",
-    total_deals
-)
+with c1:
+    st.metric(
+        "💰 Total Discount",
+        f"₹ {filtered_df['SPECIAL DISCOUNT'].sum():,.0f}"
+    )
+
+with c2:
+    st.metric(
+        "📋 Records",
+        f"{len(filtered_df):,}"
+    )
+
+with c3:
+    st.metric(
+        "🚘 Models",
+        filtered_df["VEH.MODEL"].nunique()
+    )
+
+with c4:
+    st.metric(
+        "👤 RM Count",
+        filtered_df["RM NAME"].nunique()
+    )
 
 st.divider()
 
-# ------------------------------------------
-# VEHICLE ANALYSIS
-# ------------------------------------------
+# =========================================================
+# MONTH DATA
+# =========================================================
 
-vehicle_summary = (
-    filtered_df.groupby("VEH")["SPECIAL DISCOUNT"]
+month_data = (
+    filtered_df
+    .groupby("MONTH", as_index=False)
+    ["SPECIAL DISCOUNT"]
     .sum()
-    .reset_index()
 )
 
-left, right = st.columns(2)
+month_data["MONTH"] = pd.Categorical(
+    month_data["MONTH"],
+    categories=month_order,
+    ordered=True
+)
 
-with left:
+month_data = month_data.sort_values("MONTH")
 
-    fig_vehicle = px.bar(
-        vehicle_summary,
-        x="VEH",
+# =========================================================
+# MODEL DATA
+# =========================================================
+
+model_data = (
+    filtered_df
+    .groupby("VEH.MODEL", as_index=False)
+    ["SPECIAL DISCOUNT"]
+    .sum()
+    .sort_values(
+        "SPECIAL DISCOUNT",
+        ascending=False
+    )
+)
+
+# =========================================================
+# RM DATA
+# =========================================================
+
+rm_data = (
+    filtered_df
+    .groupby("RM NAME", as_index=False)
+    ["SPECIAL DISCOUNT"]
+    .sum()
+    .sort_values(
+        "SPECIAL DISCOUNT",
+        ascending=False
+    )
+)
+
+# =========================================================
+# SRM DATA
+# =========================================================
+
+srm_data = (
+    filtered_df
+    .groupby("SRM NAME", as_index=False)
+    ["SPECIAL DISCOUNT"]
+    .sum()
+    .sort_values(
+        "SPECIAL DISCOUNT",
+        ascending=False
+    )
+)
+
+# =========================================================
+# COMMON CHART SETTINGS
+# =========================================================
+
+common_layout = dict(
+    template="plotly_dark",
+    margin=dict(
+        l=50,
+        r=30,
+        t=70,
+        b=50
+    ),
+    paper_bgcolor="#0E1117",
+    plot_bgcolor="#0E1117",
+    font=dict(size=12)
+)
+
+# =========================================================
+# ROW 1
+# =========================================================
+
+col1, col2 = st.columns(2)
+
+# =========================================================
+# MONTH CHART
+# =========================================================
+
+with col1:
+
+    fig_month = px.bar(
+        month_data,
+        x="MONTH",
         y="SPECIAL DISCOUNT",
-        color="VEH",
-        title="Vehicle Wise Discount"
+        color="MONTH",
+        color_discrete_map=MONTH_COLORS,
+        title="📅 Month Wise Discount"
+    )
+
+    fig_month.update_traces(
+        texttemplate="₹%{y:,.0f}",
+        textposition="inside"
+    )
+
+    fig_month.update_layout(
+        **common_layout,
+        height=400,
+        showlegend=False,
+        xaxis_title="Month",
+        yaxis_title="Special Discount"
     )
 
     st.plotly_chart(
-        fig_vehicle,
+        fig_month,
         use_container_width=True
     )
 
-with right:
+# =========================================================
+# MODEL CHART
+# =========================================================
 
-    fig_pie = px.pie(
-        vehicle_summary,
-        names="VEH",
+with col2:
+
+    fig_model = px.bar(
+        model_data,
+        x="SPECIAL DISCOUNT",
+        y="VEH.MODEL",
+        orientation="h",
+        color="VEH.MODEL",
+        color_discrete_sequence=COLORS,
+        title="🚘 Model Wise Discount"
+    )
+
+    fig_model.update_traces(
+        texttemplate="₹%{x:,.0f}",
+        textposition="inside"
+    )
+
+    fig_model.update_layout(
+        **common_layout,
+        height=400,
+        showlegend=False,
+        xaxis_title="Special Discount",
+        yaxis_title="Vehicle Model"
+    )
+
+    st.plotly_chart(
+        fig_model,
+        use_container_width=True
+    )
+
+# =========================================================
+# DONUT CHART
+# =========================================================
+
+st.subheader("🍩 Vehicle Model Contribution")
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    fig_donut = px.pie(
+        model_data,
+        names="VEH.MODEL",
         values="SPECIAL DISCOUNT",
-        hole=0.4,
-        title="Discount Share by Vehicle"
+        hole=0.55,
+        color="VEH.MODEL",
+        color_discrete_sequence=COLORS,
+        title="Special Discount Contribution"
+    )
+
+    fig_donut.update_traces(
+        textposition="inside",
+        textinfo="percent"
+    )
+
+    fig_donut.update_layout(
+        **common_layout,
+        height=450,
+        legend=dict(
+            orientation="h",
+            y=-0.15
+        )
     )
 
     st.plotly_chart(
-        fig_pie,
+        fig_donut,
         use_container_width=True
     )
 
-# ------------------------------------------
-# TL RANKING
-# ------------------------------------------
+# =========================================================
+# TOP 10 MODEL
+# =========================================================
 
-st.subheader("🏆 Team Leader Ranking")
+with col2:
 
-tl_summary = (
-    filtered_df.groupby("T.L. NAME")["SPECIAL DISCOUNT"]
-    .sum()
-    .reset_index()
-    .sort_values(
-        "SPECIAL DISCOUNT",
-        ascending=False
+    top10 = model_data.head(10)
+
+    fig_top10 = px.bar(
+        top10,
+        x="SPECIAL DISCOUNT",
+        y="VEH.MODEL",
+        orientation="h",
+        color="VEH.MODEL",
+        color_discrete_sequence=COLORS,
+        title="🏆 Top 10 Vehicle Models"
     )
-)
 
-fig_tl = px.bar(
-    tl_summary,
-    x="T.L. NAME",
-    y="SPECIAL DISCOUNT",
-    color="SPECIAL DISCOUNT",
-    title="TL Wise Discount Ranking"
-)
-
-st.plotly_chart(
-    fig_tl,
-    use_container_width=True
-)
-
-st.dataframe(
-    tl_summary,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# RM RANKING
-# ------------------------------------------
-
-st.subheader("🏆 RM Ranking")
-
-rm_summary = (
-    filtered_df.groupby("R.M. NAME")["SPECIAL DISCOUNT"]
-    .sum()
-    .reset_index()
-    .sort_values(
-        "SPECIAL DISCOUNT",
-        ascending=False
+    fig_top10.update_traces(
+        texttemplate="₹%{x:,.0f}",
+        textposition="inside"
     )
-)
 
-fig_rm = px.bar(
-    rm_summary,
-    x="R.M. NAME",
-    y="SPECIAL DISCOUNT",
-    color="SPECIAL DISCOUNT",
-    title="RM Wise Discount Ranking"
-)
-
-st.plotly_chart(
-    fig_rm,
-    use_container_width=True
-)
-
-st.dataframe(
-    rm_summary,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# RM + CUSTOMER RANKING
-# ------------------------------------------
-
-st.subheader("👤 RM Ranking With Customer")
-
-rm_customer = filtered_df[
-    [
-        "R.M. NAME",
-        "CUST. NAME",
-        "VEH",
-        "SPECIAL DISCOUNT"
-    ]
-].sort_values(
-    "SPECIAL DISCOUNT",
-    ascending=False
-)
-
-st.dataframe(
-    rm_customer,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# TL + CUSTOMER RANKING
-# ------------------------------------------
-
-st.subheader("👤 TL Ranking With Customer")
-
-tl_customer = filtered_df[
-    [
-        "T.L. NAME",
-        "CUST. NAME",
-        "VEH",
-        "SPECIAL DISCOUNT"
-    ]
-].sort_values(
-    "SPECIAL DISCOUNT",
-    ascending=False
-)
-
-st.dataframe(
-    tl_customer,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# TOP 20 CUSTOMER DISCOUNT
-# ------------------------------------------
-
-st.subheader("🔥 Top 20 Customers")
-
-top_customer = filtered_df[
-    [
-        "CUST. NAME",
-        "R.M. NAME",
-        "T.L. NAME",
-        "VEH",
-        "SPECIAL DISCOUNT"
-    ]
-].sort_values(
-    "SPECIAL DISCOUNT",
-    ascending=False
-).head(20)
-
-st.dataframe(
-    top_customer,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# ALL DATA
-# ------------------------------------------
-
-st.subheader("📋 All Records")
-
-st.dataframe(
-    filtered_df,
-    use_container_width=True
-)
-
-# ------------------------------------------
-# DOWNLOAD REPORT
-# ------------------------------------------
-
-excel_buffer = BytesIO()
-
-with pd.ExcelWriter(
-    excel_buffer,
-    engine="openpyxl"
-) as writer:
-
-    filtered_df.to_excel(
-        writer,
-        index=False,
-        sheet_name="NEXA Report"
+    fig_top10.update_layout(
+        **common_layout,
+        height=450,
+        showlegend=False,
+        xaxis_title="Special Discount",
+        yaxis_title="Vehicle Model"
     )
+
+    st.plotly_chart(
+        fig_top10,
+        use_container_width=True
+    )
+
+# =========================================================
+# RM / SRM
+# =========================================================
+
+st.subheader("🏆 Management Ranking")
+
+col1, col2 = st.columns(2)
+
+# =========================================================
+# RM
+# =========================================================
+
+with col1:
+
+    rm_top20 = rm_data.head(20)
+
+    fig_rm = px.bar(
+        rm_top20,
+        x="SPECIAL DISCOUNT",
+        y="RM NAME",
+        orientation="h",
+        color="RM NAME",
+        color_discrete_sequence=COLORS,
+        title="Top 20 RM Ranking"
+    )
+
+    fig_rm.update_traces(
+        texttemplate="₹%{x:,.0f}",
+        textposition="inside"
+    )
+
+    fig_rm.update_layout(
+        **common_layout,
+        height=600,
+        showlegend=False,
+        xaxis_title="Special Discount",
+        yaxis_title="RM Name"
+    )
+
+    st.plotly_chart(
+        fig_rm,
+        use_container_width=True
+    )
+
+# =========================================================
+# SRM
+# =========================================================
+
+with col2:
+
+    srm_top20 = srm_data.head(20)
+
+    fig_srm = px.bar(
+        srm_top20,
+        x="SPECIAL DISCOUNT",
+        y="SRM NAME",
+        orientation="h",
+        color="SRM NAME",
+        color_discrete_sequence=COLORS,
+        title="Top 20 SRM Ranking"
+    )
+
+    fig_srm.update_traces(
+        texttemplate="₹%{x:,.0f}",
+        textposition="inside"
+    )
+
+    fig_srm.update_layout(
+        **common_layout,
+        height=600,
+        showlegend=False,
+        xaxis_title="Special Discount",
+        yaxis_title="SRM Name"
+    )
+
+    st.plotly_chart(
+        fig_srm,
+        use_container_width=True
+    )
+
+# =========================================================
+# TABLES
+# =========================================================
+
+st.subheader("📊 Data Tables")
+
+tab1, tab2, tab3 = st.tabs(
+    [
+        "🏆 Top 20 RM",
+        "🥇 Top 20 SRM",
+        "📋 Detailed Data"
+    ]
+)
+
+with tab1:
+
+    st.dataframe(
+        rm_data.head(20),
+        use_container_width=True,
+        hide_index=True
+    )
+
+with tab2:
+
+    st.dataframe(
+        srm_data.head(20),
+        use_container_width=True,
+        hide_index=True
+    )
+
+with tab3:
+
+    st.dataframe(
+        filtered_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+# =========================================================
+# DOWNLOAD
+# =========================================================
+
+st.divider()
+
+csv = filtered_df.to_csv(
+    index=False
+).encode("utf-8")
 
 st.download_button(
-    label="📥 Download Excel Report",
-    data=excel_buffer.getvalue(),
-    file_name="NEXA_Discount_Report.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    label="⬇️ Download Report",
+    data=csv,
+    file_name="nexa_report.csv",
+    mime="text/csv"
 )
