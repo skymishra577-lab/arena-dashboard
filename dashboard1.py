@@ -65,12 +65,34 @@ def load_data():
         .str.upper()
     )
 
+    required_columns = [
+        "MONTH",
+        "VEH.MODEL",
+        "RM NAME",
+        "SRM NAME",
+        "SPECIAL DISCOUNT"
+    ]
+
+    missing_columns = [
+        col for col in required_columns
+        if col not in df.columns
+    ]
+
+    if missing_columns:
+        st.error(
+            "Missing columns in Excel file: "
+            + ", ".join(missing_columns)
+        )
+        st.stop()
+
+    # Clean text columns
     for col in [
         "MONTH",
         "VEH.MODEL",
         "RM NAME",
         "SRM NAME"
     ]:
+
         df[col] = (
             df[col]
             .fillna("Unknown")
@@ -78,6 +100,7 @@ def load_data():
             .str.strip()
         )
 
+    # Convert Special Discount to number
     df["SPECIAL DISCOUNT"] = pd.to_numeric(
         df["SPECIAL DISCOUNT"],
         errors="coerce"
@@ -108,8 +131,9 @@ month_order = [
 ]
 
 available_months = [
-    x for x in month_order
-    if x in df["MONTH"].unique()
+    month
+    for month in month_order
+    if month in df["MONTH"].unique()
 ]
 
 # =========================================================
@@ -118,53 +142,99 @@ available_months = [
 
 st.sidebar.title("🚗 Arena Filters")
 
+# =========================================================
+# MONTH FILTER
+# =========================================================
+
 selected_month = st.sidebar.selectbox(
     "Month",
     ["All"] + available_months
 )
 
+# =========================================================
+# VEHICLE MODEL FILTER
+# =========================================================
+
 selected_model = st.sidebar.selectbox(
     "Vehicle Model",
     ["All"] +
-    sorted(df["VEH.MODEL"].unique())
+    sorted(
+        df["VEH.MODEL"]
+        .dropna()
+        .unique()
+    )
 )
 
-selected_rm = st.sidebar.selectbox(
-    "RM Name",
-    ["All"] +
-    sorted(df["RM NAME"].unique())
-)
+# =========================================================
+# SRM FILTER
+# =========================================================
 
 selected_srm = st.sidebar.selectbox(
     "SRM Name",
     ["All"] +
-    sorted(df["SRM NAME"].unique())
+    sorted(
+        df["SRM NAME"]
+        .dropna()
+        .unique()
+    )
 )
 
 # =========================================================
-# FILTER
+# DYNAMIC RM FILTER
+# =========================================================
+
+if selected_srm != "All":
+
+    available_rms = sorted(
+        df.loc[
+            df["SRM NAME"] == selected_srm,
+            "RM NAME"
+        ]
+        .dropna()
+        .unique()
+    )
+
+else:
+
+    available_rms = sorted(
+        df["RM NAME"]
+        .dropna()
+        .unique()
+    )
+
+selected_rm = st.sidebar.selectbox(
+    "RM Name",
+    ["All"] + available_rms
+)
+
+# =========================================================
+# FILTER DATA
 # =========================================================
 
 filtered_df = df.copy()
 
 if selected_month != "All":
+
     filtered_df = filtered_df[
         filtered_df["MONTH"] == selected_month
     ]
 
 if selected_model != "All":
+
     filtered_df = filtered_df[
         filtered_df["VEH.MODEL"] == selected_model
     ]
 
-if selected_rm != "All":
-    filtered_df = filtered_df[
-        filtered_df["RM NAME"] == selected_rm
-    ]
-
 if selected_srm != "All":
+
     filtered_df = filtered_df[
         filtered_df["SRM NAME"] == selected_srm
+    ]
+
+if selected_rm != "All":
+
+    filtered_df = filtered_df[
+        filtered_df["RM NAME"] == selected_rm
     ]
 
 # =========================================================
@@ -178,33 +248,88 @@ st.caption(
 )
 
 # =========================================================
+# EMPTY DATA CHECK
+# =========================================================
+
+if filtered_df.empty:
+
+    st.warning(
+        "⚠️ No data available for the selected filters."
+    )
+
+    st.stop()
+
+# =========================================================
 # KPI
 # =========================================================
 
 c1, c2, c3, c4 = st.columns(4)
 
+# Total Discount
 with c1:
+
+    total_discount = filtered_df[
+        "SPECIAL DISCOUNT"
+    ].sum()
+
     st.metric(
         "💰 Total Discount",
-        f"₹ {filtered_df['SPECIAL DISCOUNT'].sum():,.0f}"
+        f"₹ {total_discount:,.0f}"
     )
 
+# Records
 with c2:
+
     st.metric(
         "📋 Records",
         f"{len(filtered_df):,}"
     )
 
+# Models
 with c3:
-    st.metric(
-        "🚘 Models",
-        filtered_df["VEH.MODEL"].nunique()
+
+    model_count = (
+        filtered_df["VEH.MODEL"]
+        .replace("Unknown", pd.NA)
+        .dropna()
+        .nunique()
     )
 
+    st.metric(
+        "🚘 Models",
+        model_count
+    )
+
+# RM Count
 with c4:
+
+    rm_count = (
+        filtered_df["RM NAME"]
+        .replace("Unknown", pd.NA)
+        .dropna()
+        .nunique()
+    )
+
     st.metric(
         "👤 RM Count",
-        filtered_df["RM NAME"].nunique()
+        rm_count
+    )
+
+# =========================================================
+# FILTER INFORMATION
+# =========================================================
+
+if selected_srm != "All":
+
+    st.info(
+        f"👤 Selected SRM: **{selected_srm}** | "
+        f"RM Count: **{rm_count}**"
+    )
+
+if selected_rm != "All":
+
+    st.info(
+        f"👤 Selected RM: **{selected_rm}**"
     )
 
 st.divider()
@@ -215,8 +340,10 @@ st.divider()
 
 month_data = (
     filtered_df
-    .groupby("MONTH", as_index=False)
-    ["SPECIAL DISCOUNT"]
+    .groupby(
+        "MONTH",
+        as_index=False
+    )["SPECIAL DISCOUNT"]
     .sum()
 )
 
@@ -234,8 +361,10 @@ month_data = month_data.sort_values("MONTH")
 
 model_data = (
     filtered_df
-    .groupby("VEH.MODEL", as_index=False)
-    ["SPECIAL DISCOUNT"]
+    .groupby(
+        "VEH.MODEL",
+        as_index=False
+    )["SPECIAL DISCOUNT"]
     .sum()
     .sort_values(
         "SPECIAL DISCOUNT",
@@ -249,8 +378,10 @@ model_data = (
 
 rm_data = (
     filtered_df
-    .groupby("RM NAME", as_index=False)
-    ["SPECIAL DISCOUNT"]
+    .groupby(
+        "RM NAME",
+        as_index=False
+    )["SPECIAL DISCOUNT"]
     .sum()
     .sort_values(
         "SPECIAL DISCOUNT",
@@ -264,8 +395,10 @@ rm_data = (
 
 srm_data = (
     filtered_df
-    .groupby("SRM NAME", as_index=False)
-    ["SPECIAL DISCOUNT"]
+    .groupby(
+        "SRM NAME",
+        as_index=False
+    )["SPECIAL DISCOUNT"]
     .sum()
     .sort_values(
         "SPECIAL DISCOUNT",
@@ -291,7 +424,7 @@ common_layout = dict(
 )
 
 # =========================================================
-# ROW 1
+# MONTH + MODEL CHARTS
 # =========================================================
 
 col1, col2 = st.columns(2)
@@ -364,12 +497,16 @@ with col2:
     )
 
 # =========================================================
-# DONUT CHART
+# VEHICLE MODEL CONTRIBUTION
 # =========================================================
 
 st.subheader("🍩 Vehicle Model Contribution")
 
 col1, col2 = st.columns(2)
+
+# =========================================================
+# DONUT
+# =========================================================
 
 with col1:
 
@@ -439,7 +576,7 @@ with col2:
     )
 
 # =========================================================
-# RM / SRM
+# MANAGEMENT RANKING
 # =========================================================
 
 st.subheader("🏆 Management Ranking")
@@ -447,7 +584,7 @@ st.subheader("🏆 Management Ranking")
 col1, col2 = st.columns(2)
 
 # =========================================================
-# RM
+# RM RANKING
 # =========================================================
 
 with col1:
@@ -461,7 +598,7 @@ with col1:
         orientation="h",
         color="RM NAME",
         color_discrete_sequence=COLORS,
-        title="Top 20 RM Ranking"
+        title="RM Ranking"
     )
 
     fig_rm.update_traces(
@@ -483,7 +620,7 @@ with col1:
     )
 
 # =========================================================
-# SRM
+# SRM RANKING
 # =========================================================
 
 with col2:
@@ -497,7 +634,7 @@ with col2:
         orientation="h",
         color="SRM NAME",
         color_discrete_sequence=COLORS,
-        title="Top 20 SRM Ranking"
+        title="SRM Ranking"
     )
 
     fig_srm.update_traces(
@@ -519,6 +656,76 @@ with col2:
     )
 
 # =========================================================
+# SRM → RM → VEH.MODEL SUMMARY
+# =========================================================
+
+st.subheader(
+    "👤 SRM → RM → Vehicle Model Summary"
+)
+
+summary_data = (
+    filtered_df
+    .groupby(
+        [
+            "SRM NAME",
+            "RM NAME",
+            "VEH.MODEL"
+        ],
+        as_index=False
+    )
+    .agg(
+        Records=(
+            "VEH.MODEL",
+            "size"
+        ),
+        Special_Discount=(
+            "SPECIAL DISCOUNT",
+            "sum"
+        )
+    )
+)
+
+# =========================================================
+# RENAME COLUMNS
+# =========================================================
+
+summary_data = summary_data.rename(
+    columns={
+        "SRM NAME": "SRM Name",
+        "RM NAME": "RM Name",
+        "VEH.MODEL": "VEH.MODEL",
+        "Special_Discount": "Special Discount"
+    }
+)
+
+# =========================================================
+# SORT SUMMARY
+# =========================================================
+
+summary_data = summary_data.sort_values(
+    by=[
+        "SRM Name",
+        "RM Name",
+        "Special Discount"
+    ],
+    ascending=[
+        True,
+        True,
+        False
+    ]
+)
+
+# =========================================================
+# SUMMARY TABLE
+# =========================================================
+
+st.dataframe(
+    summary_data,
+    use_container_width=True,
+    hide_index=True
+)
+
+# =========================================================
 # TABLES
 # =========================================================
 
@@ -526,11 +733,15 @@ st.subheader("📊 Data Tables")
 
 tab1, tab2, tab3 = st.tabs(
     [
-        "🏆 Top 20 RM",
-        "🥇 Top 20 SRM",
+        "🏆 RM Data",
+        "🥇 SRM Data",
         "📋 Detailed Data"
     ]
 )
+
+# =========================================================
+# RM TABLE
+# =========================================================
 
 with tab1:
 
@@ -540,6 +751,10 @@ with tab1:
         hide_index=True
     )
 
+# =========================================================
+# SRM TABLE
+# =========================================================
+
 with tab2:
 
     st.dataframe(
@@ -547,6 +762,10 @@ with tab2:
         use_container_width=True,
         hide_index=True
     )
+
+# =========================================================
+# DETAILED DATA
+# =========================================================
 
 with tab3:
 
